@@ -1,0 +1,337 @@
+manifest:
+  version: "0.1.3"
+  schema: https://a2as.org/cert/schema
+  subject:
+    name: soundtricker/composer-agent
+    source: https://github.com/soundtricker/composer-agent
+    branch: main
+    commit: "9d403afc"
+    scope: [apps/agents/composer/agent.py, apps/agents/composer/agentengine.py, apps/agents/composer/prompts.py, apps/agents/composer/sub_agents/composer/agent.py,
+      apps/agents/composer/sub_agents/composer/prompts.py, apps/agents/composer/sub_agents/composer/tools.py, apps/agents/composer/sub_agents/long_composer/agent.py,
+      apps/agents/composer/sub_agents/long_composer/prompts.py, apps/agents/deploy_agentengine.py, apps/chatui/main.py]
+  issued:
+    by: A2AS.org
+    at: '2026-02-11T16:57:57Z'
+    url: https://a2as.org/certified/agents/soundtricker/composer-agent
+  signatures:
+    digest: sha256:IN1Nj0SZOlZnWr4NmyKgzm2Xs7isoDxPEb9PyF8Z_5Y
+    key: ed25519:S0JpswjHL3TI0dGnYuv1UfM7YRlIMTaNGCHo1XdsaWY
+    sig: ed25519:qAZXoGdtnFQU31mCX9fx0LowoK6irRHFxPfD0K-Ayob2djPPUArGOlE1EdiV7I1LV4PWLd1iEyTdVuVDEXHSDA
+
+agents:
+  agent:
+    type: instance
+    params:
+      name: ComposerFlowAgent
+      function: _run_async_impl
+      sub_agents: [LongComposerAgent, MusicPlanFormatAgent]
+  agent.LongComposerAgent:
+    type: class
+    models: [gemini-2.5-flash]
+    params:
+      class: LongComposerAgent
+      base: Agent
+      name: LongComposerAgent
+      description: An AI music Composer Agent
+      instruction: instructions()
+      planner: BuiltInPlanner(thinking_config=types.ThinkingConfig(include_thoughts=True))
+      output_key: music_plan_raw
+  agent.MusicPlanFormatAgent:
+    type: class
+    models: [gemini-2.5-flash]
+    params:
+      class: MusicPlanFormatAgent
+      base: Agent
+      name: MusicPlanFormatAgent
+      description: An AI music Composer Agent
+      instruction: [You are an agent that formats the answers from LongComposerAgent agent., '# Your task', Read data from
+          session state with key 'music_plan_raw' and format']
+      output_key: music_plan
+      output_schema: MusicPlan
+  LongComposerAgent:
+    type: instance
+    models: [gemini-2.5-flash]
+  MusicPlanFormatAgent:
+    type: instance
+    models: [gemini-2.5-flash]
+  root_agent.0:
+    type: instance
+    models: [gemini-2.0-flash]
+    tools: [generate_music_tool]
+    params:
+      name: ComposerAgent
+      description: An AI music Composer Agent.
+      instruction: instructions()
+      instance: root_agent
+  root_agent.1:
+    type: instance
+    models: [gemini-2.5-flash]
+    params:
+      name: LongComposerFlowAgent
+      instance: root_agent
+  root_agent.2:
+    type: instance
+    models: [gemini-2.5-flash]
+    tools: [agent_tool]
+    params:
+      name: root_agent
+      description: A helpful assistant for user questions.
+      instruction: instructions()
+      after_model_callback: load_artifact
+      instance: root_agent
+
+models:
+  gemini-2.0-flash:
+    type: literal
+    agents: [root_agent.0]
+  gemini-2.5-flash:
+    type: literal
+    agents: [agent.LongComposerAgent, agent.MusicPlanFormatAgent, root_agent.1, root_agent.2, LongComposerAgent, MusicPlanFormatAgent]
+
+tools:
+  agent_tool:
+    type: agent
+    agents: [root_agent.2]
+    params:
+      wrapper: AgentTool
+  generate_music_tool:
+    type: function
+    agents: [root_agent.0]
+    params:
+      description: |-
+        Generates music based on the provided prompts by utilizing Google's AI
+        Platform services and the lyria-002 model. The function is responsible for setting
+        up the client, creating request instances and parameters, and executing the request
+        to retrieve generated samples. The responses consist of generated musical data
+        predictions.
+
+        The generated music will be saved to artifact, The filename will be like 'generated_audio_{sample_number}.mp3'.
+
+        :param prompt: The prompt to use for generating music in English, it sends to Lyria model.
+        :param negative_prompt: The negative prompt for avoiding specific features in the
+            generated music. When you don't need passing, you can set the empty string.
+        :param seed: The random seed for initialization to control the variability in
+            output. When you don't need passing, you can set -1.
+        :param sample_count: The number of samples to generate. it must be 1-4.
+        :param tool_context: An object representing the contextual or environmental
+            information required for the tool's execution.
+        :return: list of the generated music_id, when it returns None, the process is failed. please retry again with changing the prompt.
+
+teams:
+  agent:
+    type: sequential
+    agents: [agent, LongComposerAgent, MusicPlanFormatAgent]
+
+imports:
+  agent: agent
+  Agent: google.adk.agents.Agent
+  agent_engines: vertexai.agent_engines
+  AgentTool: google.adk.tools.agent_tool.AgentTool
+  aiplatform: google.cloud.aiplatform
+  Any: typing.Any
+  AsyncGenerator: typing.AsyncGenerator
+  asyncio: asyncio
+  AsyncIterable: typing.AsyncIterable
+  AsyncMusicSession: google.genai.live_music.AsyncMusicSession
+  AudioSegment: pydub.AudioSegment
+  auth: google.auth
+  base64: base64
+  BaseAgent: google.adk.agents.BaseAgent
+  BaseArtifactService: google.adk.artifacts.BaseArtifactService
+  BuiltInPlanner: google.adk.planners.BuiltInPlanner
+  CallbackContext: google.adk.agents.callback_context.CallbackContext
+  cl: chainlit
+  convert_mp3: composer.utils.audio.convert_mp3
+  copy: copy
+  CustomAdkApp: composer.agentengine.CustomAdkApp
+  dotenv: dotenv
+  Event: google.adk.events.Event
+  EventActions: google.adk.events.EventActions
+  GcsArtifactService: google.adk.artifacts.GcsArtifactService
+  genai: google.genai
+  generate_music_tool: tools.generate_music_tool
+  get_chat_api: chatui.services.chat_api.get_chat_api
+  get_settings: chatui.settings.get_settings
+  instructions: prompts.instructions
+  InvocationContext: google.adk.agents.invocation_context.InvocationContext
+  io: io
+  json: json
+  json_format: google.protobuf.json_format
+  LlmResponse: google.adk.models.LlmResponse
+  load_dotenv: dotenv.load_dotenv
+  logging: google.cloud.logging
+  long_composer_agent: sub_agents.long_composer.agent.root_agent
+  MusicPlan: composer.schema.music_plan.MusicPlan
+  os: os
+  Payload: engineio.payload.Payload
+  re: re
+  reasoning_engines: vertexai.preview.reasoning_engines
+  root_agent: composer.agent.root_agent
+  RunConfig: google.adk.agents.run_config.RunConfig
+  SequentialAgent: google.adk.agents.SequentialAgent
+  State: chatui.schema.state.State
+  StreamingMode: google.adk.agents.run_config.StreamingMode
+  sys: sys
+  ToolContext: google.adk.tools.ToolContext
+  types: google.genai.types
+  uuid: uuid
+  ValidationError: pydantic.v1.ValidationError
+  Value: google.protobuf.struct_pb2.Value
+  vertexai: vertexai
+  websockets: websockets
+
+functions:
+  __init__:
+    type: sync
+    module: apps.agents.composer.sub_agents.long_composer.agent
+    args: [self]
+  _run_async_impl:
+    type: async
+    module: apps.agents.composer.sub_agents.long_composer.agent
+    args: [self, ctx]
+    params:
+      returns: AsyncGenerator
+  async_stream_query_sse:
+    type: async
+    module: apps.agents.composer.agentengine
+    args: [self]
+    params:
+      returns: AsyncIterable[dict]
+  clone:
+    type: sync
+    module: apps.agents.composer.agentengine
+    args: [self]
+  deploy_agentengine:
+    type: sync
+    module: apps.agents.deploy_agentengine
+  generate_artifact_service:
+    type: sync
+    module: apps.agents.deploy_agentengine
+  generate_music:
+    type: async
+    module: apps.agents.composer.sub_agents.long_composer.agent
+    args: [self, ctx]
+  generate_music_tool:
+    type: async
+    module: apps.agents.composer.sub_agents.composer.tools
+    args: [prompt, negative_prompt, seed, sample_count, tool_context]
+  handle_error:
+    type: async
+    module: apps.chatui.main
+    args: [event_dict]
+  handle_function_call:
+    type: async
+    module: apps.chatui.main
+    args: [part, current_tool]
+  handle_function_response:
+    type: async
+    module: apps.chatui.main
+    args: [part, current_tool]
+  handle_inline_data:
+    type: async
+    module: apps.chatui.main
+    args: [part, partial_msg]
+  handle_partial_event:
+    type: async
+    module: apps.chatui.main
+    args: [part, state, partial_msg]
+  handle_text_content:
+    type: async
+    module: apps.chatui.main
+    args: [part, partial_msg]
+  instructions:
+    type: sync
+    module: apps.agents.composer.prompts
+    params:
+      returns: str
+  list_artifact:
+    type: async
+    module: apps.agents.composer.agentengine
+    args: [self, user_id, session_id]
+  load_artifact:
+    type: async
+    module: apps.agents.composer.agent
+    args: [callback_context, llm_response]
+    params:
+      returns: LlmResponse
+  on_message:
+    type: async
+    module: apps.chatui.main
+    args: [message]
+  process_artifacts:
+    type: async
+    module: apps.chatui.main
+    args: [part, state, partial_msg]
+  process_streaming_query:
+    type: async
+    module: apps.chatui.main
+    args: [content, state, partial_msg]
+  receive_audio:
+    type: async
+    module: apps.agents.composer.sub_agents.long_composer.agent
+    args: [session]
+  register_operations:
+    type: sync
+    module: apps.agents.composer.agentengine
+    args: [self]
+    params:
+      returns: dict
+  save_audio:
+    type: async
+    module: apps.agents.composer.sub_agents.long_composer.agent
+    args: [self, ctx, audio_byte_array]
+    params:
+      returns: types.Content
+  set_starters:
+    type: async
+    module: apps.chatui.main
+  set_up:
+    type: sync
+    module: apps.agents.composer.agentengine
+    args: [self]
+  setup:
+    type: async
+    module: apps.chatui.main
+  stream_query_sse:
+    type: sync
+    module: apps.agents.composer.agentengine
+    args: [self]
+
+variables:
+  ARTIFACT_BUCKET:
+    type: env
+    params:
+      caller: [os.environ.get]
+      path: [apps.agents.deploy_agentengine]
+  GEMINI_API_KEY:
+    type: env
+    params:
+      caller: [os.environ.get]
+      path: [apps.agents.deploy_agentengine, apps.agents.composer.sub_agents.long_composer.agent]
+  GOOGLE_CLOUD_LOCATION:
+    type: env
+    params:
+      caller: [os.environ.get]
+      path: [apps.agents.deploy_agentengine]
+  GOOGLE_CLOUD_PROJECT:
+    type: env
+    params:
+      caller: [os.environ.get]
+      path: [apps.agents.deploy_agentengine, apps.agents.composer.agentengine]
+  K_SERVICE:
+    type: env
+    params:
+      caller: [os.environ.get]
+      path: [apps.agents.composer.agentengine]
+  STAGING_BUCKET:
+    type: env
+    params:
+      caller: [os.environ.get]
+      path: [apps.agents.deploy_agentengine]
+
+files:
+  .agentengine.json:
+    type: variable
+    actions: [read]
+    params:
+      caller: [os.path.isfile, open, json.load]
